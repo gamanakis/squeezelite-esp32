@@ -11,3 +11,6 @@
 [submodule "components/wifi-manager/webapp/src/bootswatch"]
 	path = components/wifi-manager/webapp/src/bootswatch
 	url = https://github.com/thomaspark/bootswatch.git
+[submodule "squeezelite-esp32-s3-qio-padding"]
+	path = squeezelite-esp32-s3-qio-padding
+	url = https://github.com/ElFishi/squeezelite-esp32-s3-qio-padding
