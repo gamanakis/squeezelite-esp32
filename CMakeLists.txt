@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
+include(qio_padding.cmake) 
+
 set(PROJECT_VER $ENV{PROJECT_VER})
 add_definitions(-DMODEL_NAME=SqueezeESP32)
 
@@ -62,10 +64,28 @@ add_custom_command(
 	        VERBATIM
 )
 
+
 # when building recovery, add app_recovery to the link
 get_target_property(BCA recovery.elf LINK_LIBRARIES)
 list(REMOVE_ITEM BCA "idf::app_squeezelite" "idf::app_recovery" "-Wl,--Map=${BUILD_DIR}/recovery.map")
-set_target_properties(recovery.elf PROPERTIES LINK_LIBRARIES "${BCA};idf::app_recovery;-Wl,--Map=${BUILD_DIR}/recovery.map")
+
+# Add padding link flags for recovery too
+set_target_properties(recovery.elf PROPERTIES 
+    LINK_LIBRARIES "${BCA};idf::app_recovery;-Wl,--Map=${BUILD_DIR}/recovery.map;${PADDING_LINK_FLAGS}"
+)
+# set_target_properties(recovery.elf PROPERTIES LINK_LIBRARIES "${BCA};idf::app_recovery;-Wl,--Map=${BUILD_DIR}/recovery.map")
+
+# -------------------------------------------------------------------------
+# Generate a Secure Boot V2 padded version of recovery.bin
+# -------------------------------------------------------------------------
+add_custom_command(
+    TARGET recovery.elf
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E echo "Re-generating recovery.bin with --secure-pad-v2..."
+    
+    COMMAND ${ESPTOOLPY} elf2image --secure-pad-v2 ${ESPTOOLPY_FLASH_OPTIONS} ${ESPTOOLPY_ELF2IMAGE_OPTIONS} -o "${BUILD_DIR}/recovery_padded.bin" "recovery.elf"
+    VERBATIM
+)
 
 # create files with size for recovery 
 # build_size(recovery)
@@ -73,13 +93,19 @@ set_target_properties(recovery.elf PROPERTIES LINK_LIBRARIES "${BCA};idf::app_re
 # build squeezelite, add app_squeezelite to the link
 add_executable(squeezelite.elf "CMakeLists.txt")
 add_dependencies(squeezelite.elf recovery.elf)
-set_target_properties(squeezelite.elf PROPERTIES LINK_LIBRARIES "${BCA};idf::app_squeezelite;-Wl,--Map=${BUILD_DIR}/squeezelite.map,--wrap=esp_panic_handler")
+set_target_properties(squeezelite.elf PROPERTIES
+	LINK_LIBRARIES "${BCA};idf::app_squeezelite;-Wl,--Map=${BUILD_DIR}/squeezelite.map,--wrap=esp_panic_handler;${PADDING_LINK_FLAGS}"
+)
+
+# set_target_properties(squeezelite.elf PROPERTIES LINK_LIBRARIES "${BCA};idf::app_squeezelite;-Wl,--Map=${BUILD_DIR}/squeezelite.map,--wrap=esp_panic_handler") 
 add_custom_command(
 			TARGET squeezelite.elf
 			POST_BUILD 
 			COMMAND ${CMAKE_COMMAND} -E echo "Generating ${BUILD_DIR}/squeezelite.bin"
-			COMMAND ${ESPTOOLPY} elf2image ${ESPTOOLPY_FLASH_OPTIONS} ${ESPTOOLPY_ELF2IMAGE_OPTIONS} -o "squeezelite.bin" "squeezelite.elf"
-	        VERBATIM
+
+			# COMMAND ${ESPTOOLPY} elf2image ${ESPTOOLPY_FLASH_OPTIONS} ${ESPTOOLPY_ELF2IMAGE_OPTIONS} -o "squeezelite.bin" "squeezelite.elf"
+			COMMAND ${ESPTOOLPY} elf2image --secure-pad-v2 ${ESPTOOLPY_FLASH_OPTIONS} ${ESPTOOLPY_ELF2IMAGE_OPTIONS} -o "squeezelite.bin" "squeezelite.elf"
+		VERBATIM
 )
 
 # create files with size for squeezelite
